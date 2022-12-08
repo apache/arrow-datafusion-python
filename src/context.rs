@@ -30,12 +30,13 @@ use parking_lot::RwLock;
 use crate::catalog::{PyCatalog, PyTable};
 use crate::dataframe::PyDataFrame;
 use crate::dataset::Dataset;
+use crate::datatype::PyDataType;
 use crate::errors::DataFusionError;
 use crate::store::StorageContexts;
 use crate::udaf::PyAggregateUDF;
 use crate::udf::PyScalarUDF;
 use crate::utils::wait_for_future;
-use datafusion::arrow::datatypes::Schema;
+use datafusion::arrow::datatypes::{DataType, Schema};
 use datafusion::arrow::pyarrow::PyArrowType;
 use datafusion::arrow::record_batch::RecordBatch;
 use datafusion::config::ConfigOptions;
@@ -218,13 +219,13 @@ impl PySessionContext {
         &mut self,
         name: &str,
         path: &str,
-        table_partition_cols: Vec<String>,
+        table_partition_cols: Vec<(String, PyDataType)>,
         parquet_pruning: bool,
         file_extension: &str,
         py: Python,
     ) -> PyResult<()> {
         let mut options = ParquetReadOptions::default()
-            .table_partition_cols(table_partition_cols)
+            .table_partition_cols(convert_table_partition_cols(table_partition_cols))
             .parquet_pruning(parquet_pruning);
         options.file_extension = file_extension;
         let result = self.ctx.register_parquet(name, path, options);
@@ -340,14 +341,14 @@ impl PySessionContext {
         schema: Option<PyArrowType<Schema>>,
         schema_infer_max_records: usize,
         file_extension: &str,
-        table_partition_cols: Vec<String>,
+        table_partition_cols: Vec<(String, PyDataType)>,
         py: Python,
     ) -> PyResult<PyDataFrame> {
         let path = path
             .to_str()
             .ok_or_else(|| PyValueError::new_err("Unable to convert path to a string"))?;
-
-        let mut options = NdJsonReadOptions::default().table_partition_cols(table_partition_cols);
+        let mut options = NdJsonReadOptions::default()
+            .table_partition_cols(convert_table_partition_cols(table_partition_cols));
         options.schema = schema.map(|s| Arc::new(s.0));
         options.schema_infer_max_records = schema_infer_max_records;
         options.file_extension = file_extension;
@@ -374,7 +375,7 @@ impl PySessionContext {
         delimiter: &str,
         schema_infer_max_records: usize,
         file_extension: &str,
-        table_partition_cols: Vec<String>,
+        table_partition_cols: Vec<(String, PyDataType)>,
         py: Python,
     ) -> PyResult<PyDataFrame> {
         let path = path
@@ -393,7 +394,7 @@ impl PySessionContext {
             .delimiter(delimiter[0])
             .schema_infer_max_records(schema_infer_max_records)
             .file_extension(file_extension)
-            .table_partition_cols(table_partition_cols);
+            .table_partition_cols(convert_table_partition_cols(table_partition_cols));
 
         if let Some(py_schema) = schema {
             options.schema = Some(&py_schema.0);
@@ -417,14 +418,14 @@ impl PySessionContext {
     fn read_parquet(
         &self,
         path: &str,
-        table_partition_cols: Vec<String>,
+        table_partition_cols: Vec<(String, PyDataType)>,
         parquet_pruning: bool,
         file_extension: &str,
         skip_metadata: bool,
         py: Python,
     ) -> PyResult<PyDataFrame> {
         let mut options = ParquetReadOptions::default()
-            .table_partition_cols(table_partition_cols)
+            .table_partition_cols(convert_table_partition_cols(table_partition_cols))
             .parquet_pruning(parquet_pruning)
             .skip_metadata(skip_metadata);
         options.file_extension = file_extension;
@@ -444,11 +445,12 @@ impl PySessionContext {
         &self,
         path: &str,
         schema: Option<PyArrowType<Schema>>,
-        table_partition_cols: Vec<String>,
+        table_partition_cols: Vec<(String, PyDataType)>,
         file_extension: &str,
         py: Python,
     ) -> PyResult<PyDataFrame> {
-        let mut options = AvroReadOptions::default().table_partition_cols(table_partition_cols);
+        let mut options = AvroReadOptions::default()
+            .table_partition_cols(convert_table_partition_cols(table_partition_cols));
         options.file_extension = file_extension;
         options.schema = schema.map(|s| Arc::new(s.0));
 
@@ -456,4 +458,13 @@ impl PySessionContext {
         let df = PyDataFrame::new(wait_for_future(py, result).map_err(DataFusionError::from)?);
         Ok(df)
     }
+}
+
+fn convert_table_partition_cols(
+    table_partition_cols: Vec<(String, PyDataType)>,
+) -> Vec<(String, DataType)> {
+    table_partition_cols
+        .iter()
+        .map(|(name, t)| (name.clone(), t.data_type.clone()))
+        .collect()
 }
