@@ -243,7 +243,7 @@ impl PySessionContext {
 
     /// Register a an object store with the given name
     fn register_object_store(
-        &mut self,
+        &self,
         scheme: &str,
         store: &PyAny,
         host: Option<&str>,
@@ -276,14 +276,14 @@ impl PySessionContext {
     }
 
     /// Returns a PyDataFrame whose plan corresponds to the SQL statement.
-    fn sql(&mut self, query: &str, py: Python) -> PyResult<PyDataFrame> {
+    fn sql(&self, query: &str, py: Python) -> PyResult<PyDataFrame> {
         let result = self.ctx.sql(query);
         let df = wait_for_future(py, result).map_err(DataFusionError::from)?;
         Ok(PyDataFrame::new(df))
     }
 
     fn create_dataframe(
-        &mut self,
+        &self,
         partitions: PyArrowType<Vec<Vec<RecordBatch>>>,
         name: Option<&str>,
         py: Python,
@@ -314,14 +314,14 @@ impl PySessionContext {
     }
 
     /// Create a DataFrame from an existing logical plan
-    fn create_dataframe_from_logical_plan(&mut self, plan: PyLogicalPlan) -> PyDataFrame {
+    fn create_dataframe_from_logical_plan(&self, plan: PyLogicalPlan) -> PyDataFrame {
         PyDataFrame::new(DataFrame::new(self.ctx.state(), plan.plan.as_ref().clone()))
     }
 
     /// Construct datafusion dataframe from Python list
     #[allow(clippy::wrong_self_convention)]
     fn from_pylist(
-        &mut self,
+        &self,
         data: PyObject,
         name: Option<&str>,
         _py: Python,
@@ -341,7 +341,7 @@ impl PySessionContext {
     /// Construct datafusion dataframe from Python dictionary
     #[allow(clippy::wrong_self_convention)]
     fn from_pydict(
-        &mut self,
+        &self,
         data: PyObject,
         name: Option<&str>,
         _py: Python,
@@ -361,7 +361,7 @@ impl PySessionContext {
     /// Construct datafusion dataframe from Arrow Table
     #[allow(clippy::wrong_self_convention)]
     fn from_arrow_table(
-        &mut self,
+        &self,
         data: PyObject,
         name: Option<&str>,
         _py: Python,
@@ -382,7 +382,7 @@ impl PySessionContext {
     /// Construct datafusion dataframe from pandas
     #[allow(clippy::wrong_self_convention)]
     fn from_pandas(
-        &mut self,
+        &self,
         data: PyObject,
         name: Option<&str>,
         _py: Python,
@@ -402,7 +402,7 @@ impl PySessionContext {
     /// Construct datafusion dataframe from polars
     #[allow(clippy::wrong_self_convention)]
     fn from_polars(
-        &mut self,
+        &self,
         data: PyObject,
         name: Option<&str>,
         _py: Python,
@@ -417,14 +417,14 @@ impl PySessionContext {
         })
     }
 
-    fn register_table(&mut self, name: &str, table: &PyTable) -> PyResult<()> {
+    fn register_table(&self, name: &str, table: &PyTable) -> PyResult<()> {
         self.ctx
             .register_table(name, table.table())
             .map_err(DataFusionError::from)?;
         Ok(())
     }
 
-    fn deregister_table(&mut self, name: &str) -> PyResult<()> {
+    fn deregister_table(&self, name: &str) -> PyResult<()> {
         self.ctx
             .deregister_table(name)
             .map_err(DataFusionError::from)?;
@@ -432,7 +432,7 @@ impl PySessionContext {
     }
 
     fn register_record_batches(
-        &mut self,
+        &self,
         name: &str,
         partitions: PyArrowType<Vec<Vec<RecordBatch>>>,
     ) -> PyResult<()> {
@@ -452,7 +452,7 @@ impl PySessionContext {
                         schema=None,
                         file_sort_order=None))]
     fn register_parquet(
-        &mut self,
+        &self,
         name: &str,
         path: &str,
         table_partition_cols: Vec<(String, String)>,
@@ -490,7 +490,7 @@ impl PySessionContext {
                         file_extension=".csv",
                         file_compression_type=None))]
     fn register_csv(
-        &mut self,
+        &self,
         name: &str,
         path: PathBuf,
         schema: Option<PyArrowType<Schema>>,
@@ -605,12 +605,12 @@ impl PySessionContext {
         Ok(())
     }
 
-    fn register_udf(&mut self, udf: PyScalarUDF) -> PyResult<()> {
+    fn register_udf(&self, udf: PyScalarUDF) -> PyResult<()> {
         self.ctx.register_udf(udf.function);
         Ok(())
     }
 
-    fn register_udaf(&mut self, udaf: PyAggregateUDF) -> PyResult<()> {
+    fn register_udaf(&self, udaf: PyAggregateUDF) -> PyResult<()> {
         self.ctx.register_udaf(udaf.function);
         Ok(())
     }
@@ -651,7 +651,7 @@ impl PySessionContext {
     #[allow(clippy::too_many_arguments)]
     #[pyo3(signature = (path, schema=None, schema_infer_max_records=1000, file_extension=".json", table_partition_cols=vec![], file_compression_type=None))]
     fn read_json(
-        &mut self,
+        &self,
         path: PathBuf,
         schema: Option<PyArrowType<Schema>>,
         schema_infer_max_records: usize,
